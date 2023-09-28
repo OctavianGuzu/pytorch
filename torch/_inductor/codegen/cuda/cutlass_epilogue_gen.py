@@ -89,6 +89,9 @@ class CutlassEVTEpilogueTypeFormatter:
         # see https://github.com/NVIDIA/cutlass/blob/6407bcdf0a24097b7b016ee105937693c62f9923/include/cutlass/functional.h for ops
         return f"cutlass::epilogue::fusion::Sm90EVT<cutlass::epilogue::fusion::Sm90Compute<cutlass::{op}, ElementAcc, ElementAcc, RoundStyle>,{a},{b}>"  # noqa: B950
 
+    def _convert_to_output_dtype(self, a):
+        return f"cutlass::epilogue::fusion::Sm90EVT<cutlass::epilogue::fusion::Sm90Compute<identity_op, ElementD, ElementAcc, RoundStyle>,{a}>"  # noqa: B950
+
     def _op_mul(self, a, b):
         return self._cutlass_binary_functional_op("multiplies", a, b)
 
@@ -105,9 +108,11 @@ class CutlassEVTEpilogueTypeFormatter:
         raise NotImplementedError()
 
     def getvalue(self, result):
-        self.output.writeline(
-            f"using {self.evt_type_name} = EVT_expr_{self.var_counter};"
+        dtype_converted_expr = self._convert_to_output_dtype(
+            f"EVT_expr_{self.var_counter}"
         )
+
+        self.output.writeline(f"using {self.evt_type_name} = {dtype_converted_expr};")
         return self.output.getvalue()
 
 
@@ -195,7 +200,7 @@ class CutlassEVTEpilogueArgumentFormatter:
         raise NotImplementedError()
 
     def getvalue(self, result):
-        return result
+        return "{" + str(result) + "}"
 
 
 #

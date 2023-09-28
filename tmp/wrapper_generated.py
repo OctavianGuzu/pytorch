@@ -1,17 +1,9 @@
+from ctypes import c_void_p
 
-from ctypes import c_void_p, c_long
 import torch
-import math
-import random
-import os
-import tempfile
-from math import inf, nan
-from torch._inductor.hooks import run_intermediate_hooks
-from torch._inductor.utils import maybe_profile
 
-from torch import empty_strided, device
+from torch import empty_strided
 from torch._inductor.codecache import AsyncCompile
-from torch._inductor.select_algorithm import extern_kernels
 
 aten = torch.ops.aten
 assert_size_stride = torch._C._dynamo.guards.assert_size_stride
@@ -19,10 +11,11 @@ reinterpret_tensor = torch.ops.inductor._reinterpret_tensor
 async_compile = AsyncCompile()
 
 
-# kernel path: /tmp/torchinductor_klondenberg/pu/cpul3klbbii7ehtnxp2gyskolqqhafljq4yidg3tgvcbkdfedsdy.py
+# kernel path: /tmp/torchinductor_klondenberg/rp/crpca4klggdjdqexxjsyf5ruyxw3ten2s7dea44hjac3nntuwgev.py
 # Source Nodes: [mul], Original ATen: [aten.mul]
 # mul => mul
-cuda_fused_mul_0 = async_compile.cuda(r'''
+cuda_fused_mul_0 = async_compile.cuda(
+    r"""
 #include <exception>
 #include <iostream>
 #include <memory>
@@ -79,56 +72,64 @@ using namespace cute;
   }                                                                                \
 }
 
+// Used as pass-through functor in EVT just for type casting / rounding
+template <typename T>
+struct identity_op {
+  CUTLASS_HOST_DEVICE
+  T operator()(T val) const { return val; }
+};
+
 
 using EpilogueScheduleType = cutlass::epilogue::TmaWarpSpecializedCooperative;
 static_assert(cute::is_same_v<EpilogueScheduleType, cutlass::epilogue::TmaWarpSpecialized> ||
          cute::is_same_v<EpilogueScheduleType, cutlass::epilogue::TmaWarpSpecializedCooperative>,
         "Epilogue visitor trees are currently only supported by the TMA warp-specialized epilogue");
 static constexpr auto RoundStyle = cutlass::FloatRoundStyle::round_to_nearest;
-using ElementAcc = cutlass::half_t;
+using ElementAcc = float;
+using ElementD = cutlass::half_t;
 using EVT_expr_1 = cutlass::epilogue::fusion::Sm90AccFetch /* :=buf1 (matmul output in accumulator) */;
 using EVT_expr_2 = cutlass::epilogue::fusion::Sm90ScalarBroadcast<ElementAcc> /* value=3.0, dtype=torch.float16 */;
 using EVT_expr_3 = cutlass::epilogue::fusion::Sm90EVT<cutlass::epilogue::fusion::Sm90Compute<cutlass::multiplies, ElementAcc, ElementAcc, RoundStyle>,EVT_expr_1,EVT_expr_2>;
-using cutlass3x_sm90_tensorop_h64x128x16gemm_f16_f16_f16_void_f16_128x128x64_2x1x1_0_ttn_align8_warpspecialized_cooperative_epi_tma_epilogue_functor = EVT_expr_3;
+using cutlass3x_sm90_tensorop_s64x128x16gemm_f16_f16_f32_void_f16_128x128x64_2x1x1_0_ttn_align8_warpspecialized_cooperative_epi_tma_epilogue_functor = cutlass::epilogue::fusion::Sm90EVT<cutlass::epilogue::fusion::Sm90Compute<identity_op, ElementD, ElementAcc, RoundStyle>,EVT_expr_3>;
 ;
-using cutlass3x_sm90_tensorop_h64x128x16gemm_f16_f16_f16_void_f16_128x128x64_2x1x1_0_ttn_align8_warpspecialized_cooperative_epi_tma_epilogue =
+using cutlass3x_sm90_tensorop_s64x128x16gemm_f16_f16_f32_void_f16_128x128x64_2x1x1_0_ttn_align8_warpspecialized_cooperative_epi_tma_epilogue =
   typename cutlass::epilogue::collective::CollectiveBuilder<
     cutlass::arch::Sm90, cutlass::arch::OpClassTensorOp,
     cute::Shape<cute::_128, cute::_128, cute::_64>,
     cute::Shape<cute::_2,cute::_1,cute::_1>,
     cutlass::epilogue::collective::EpilogueTileAuto,
-    cutlass::half_t, cutlass::half_t,
+    float, float,
     void, cutlass::layout::ColumnMajor, 8,
     cutlass::half_t, cutlass::layout::RowMajor, 8,
     EpilogueScheduleType,
-    cutlass3x_sm90_tensorop_h64x128x16gemm_f16_f16_f16_void_f16_128x128x64_2x1x1_0_ttn_align8_warpspecialized_cooperative_epi_tma_epilogue_functor
+    cutlass3x_sm90_tensorop_s64x128x16gemm_f16_f16_f32_void_f16_128x128x64_2x1x1_0_ttn_align8_warpspecialized_cooperative_epi_tma_epilogue_functor
   >::CollectiveOp;
 
-using cutlass3x_sm90_tensorop_h64x128x16gemm_f16_f16_f16_void_f16_128x128x64_2x1x1_0_ttn_align8_warpspecialized_cooperative_epi_tma_mainloop =
+using cutlass3x_sm90_tensorop_s64x128x16gemm_f16_f16_f32_void_f16_128x128x64_2x1x1_0_ttn_align8_warpspecialized_cooperative_epi_tma_mainloop =
   typename cutlass::gemm::collective::CollectiveBuilder<
     cutlass::arch::Sm90, cutlass::arch::OpClassTensorOp,
     cutlass::half_t, cutlass::layout::RowMajor, 8,
     cutlass::half_t, cutlass::layout::RowMajor, 8,
-    cutlass::half_t,
+    float,
     cute::Shape<cute::_128, cute::_128, cute::_64>,
     cute::Shape<cute::_2,cute::_1,cute::_1>,
-    cutlass::gemm::collective::StageCountAutoCarveout<sizeof(typename cutlass3x_sm90_tensorop_h64x128x16gemm_f16_f16_f16_void_f16_128x128x64_2x1x1_0_ttn_align8_warpspecialized_cooperative_epi_tma_epilogue::SharedStorage)>,
+    cutlass::gemm::collective::StageCountAutoCarveout<sizeof(typename cutlass3x_sm90_tensorop_s64x128x16gemm_f16_f16_f32_void_f16_128x128x64_2x1x1_0_ttn_align8_warpspecialized_cooperative_epi_tma_epilogue::SharedStorage)>,
   cutlass::gemm::KernelTmaWarpSpecializedCooperative
   >::CollectiveOp;
 
-// Gemm operator cutlass3x_sm90_tensorop_h64x128x16gemm_f16_f16_f16_void_f16_128x128x64_2x1x1_0_ttn_align8_warpspecialized_cooperative_epi_tma
-using cutlass3x_sm90_tensorop_h64x128x16gemm_f16_f16_f16_void_f16_128x128x64_2x1x1_0_ttn_align8_warpspecialized_cooperative_epi_tma_base = cutlass::gemm::kernel::GemmUniversal<
+// Gemm operator cutlass3x_sm90_tensorop_s64x128x16gemm_f16_f16_f32_void_f16_128x128x64_2x1x1_0_ttn_align8_warpspecialized_cooperative_epi_tma
+using cutlass3x_sm90_tensorop_s64x128x16gemm_f16_f16_f32_void_f16_128x128x64_2x1x1_0_ttn_align8_warpspecialized_cooperative_epi_tma_base = cutlass::gemm::kernel::GemmUniversal<
     cute::Shape<int,int,int,int>,
-    cutlass3x_sm90_tensorop_h64x128x16gemm_f16_f16_f16_void_f16_128x128x64_2x1x1_0_ttn_align8_warpspecialized_cooperative_epi_tma_mainloop,
-    cutlass3x_sm90_tensorop_h64x128x16gemm_f16_f16_f16_void_f16_128x128x64_2x1x1_0_ttn_align8_warpspecialized_cooperative_epi_tma_epilogue,
+    cutlass3x_sm90_tensorop_s64x128x16gemm_f16_f16_f32_void_f16_128x128x64_2x1x1_0_ttn_align8_warpspecialized_cooperative_epi_tma_mainloop,
+    cutlass3x_sm90_tensorop_s64x128x16gemm_f16_f16_f32_void_f16_128x128x64_2x1x1_0_ttn_align8_warpspecialized_cooperative_epi_tma_epilogue,
     cutlass::gemm::PersistentScheduler>;
 
 // Define named type
-struct cutlass3x_sm90_tensorop_h64x128x16gemm_f16_f16_f16_void_f16_128x128x64_2x1x1_0_ttn_align8_warpspecialized_cooperative_epi_tma :
-  public cutlass3x_sm90_tensorop_h64x128x16gemm_f16_f16_f16_void_f16_128x128x64_2x1x1_0_ttn_align8_warpspecialized_cooperative_epi_tma_base { };
+struct cutlass3x_sm90_tensorop_s64x128x16gemm_f16_f16_f32_void_f16_128x128x64_2x1x1_0_ttn_align8_warpspecialized_cooperative_epi_tma :
+  public cutlass3x_sm90_tensorop_s64x128x16gemm_f16_f16_f32_void_f16_128x128x64_2x1x1_0_ttn_align8_warpspecialized_cooperative_epi_tma_base { };
 
 
-  using cutlass3x_sm90_tensorop_h64x128x16gemm_f16_f16_f16_void_f16_128x128x64_2x1x1_0_ttn_align8_warpspecialized_cooperative_epi_tma_device_type = cutlass::gemm::device::GemmUniversalAdapter<cutlass3x_sm90_tensorop_h64x128x16gemm_f16_f16_f16_void_f16_128x128x64_2x1x1_0_ttn_align8_warpspecialized_cooperative_epi_tma>;
+  using cutlass3x_sm90_tensorop_s64x128x16gemm_f16_f16_f32_void_f16_128x128x64_2x1x1_0_ttn_align8_warpspecialized_cooperative_epi_tma_device_type = cutlass::gemm::device::GemmUniversalAdapter<cutlass3x_sm90_tensorop_s64x128x16gemm_f16_f16_f32_void_f16_128x128x64_2x1x1_0_ttn_align8_warpspecialized_cooperative_epi_tma>;
 
 // When workspace_size is not a nullptr, populates requested workspace_size and returns.
 // Otherwise, compuates the Gemm kernel using the given workspace ptr.
@@ -170,9 +171,9 @@ PT_EXPORT int cuda_fused_mul_0(const half* X, const half* W, half* Y, size_t* wo
   int64_t M = 256L;
   int64_t K = 32L;
   int64_t N = 256L;
-  using ElementComputeEpilogue = cutlass3x_sm90_tensorop_h64x128x16gemm_f16_f16_f16_void_f16_128x128x64_2x1x1_0_ttn_align8_warpspecialized_cooperative_epi_tma_device_type::ElementAccumulator;
+  using ElementComputeEpilogue = cutlass3x_sm90_tensorop_s64x128x16gemm_f16_f16_f32_void_f16_128x128x64_2x1x1_0_ttn_align8_warpspecialized_cooperative_epi_tma_device_type::ElementAccumulator;
   using coord_t = cutlass::gemm::GemmCoord::Index;
-  cutlass3x_sm90_tensorop_h64x128x16gemm_f16_f16_f16_void_f16_128x128x64_2x1x1_0_ttn_align8_warpspecialized_cooperative_epi_tma_device_type::Arguments arguments;
+  cutlass3x_sm90_tensorop_s64x128x16gemm_f16_f16_f32_void_f16_128x128x64_2x1x1_0_ttn_align8_warpspecialized_cooperative_epi_tma_device_type::Arguments arguments;
 
   // Initialize GemmUniversal3xInstance arguments.
   arguments = {
@@ -200,7 +201,7 @@ PT_EXPORT int cuda_fused_mul_0(const half* X, const half* W, half* Y, size_t* wo
 
     // see https://github.com/NVIDIA/cutlass/blob/e0aaa3c3b38db9a89c31f04fef91e92123ad5e2e/include/cutlass/epilogue/collective/sm90_epilogue_tma_warpspecialized.hpp#L184
     {
-      {{}, { static_cast<ElementAcc>(3.0) }},  // thread, typename FusionCallbacks::Arguments ( EVT Arguments )
+      {{{}, { static_cast<ElementAcc>(3.0) }}},  // thread, typename FusionCallbacks::Arguments ( EVT Arguments )
       nullptr,  // ElementC const* ptr_C
       {
         cute::Int<1>{} /* stride_bias0 */,
@@ -215,7 +216,7 @@ PT_EXPORT int cuda_fused_mul_0(const half* X, const half* W, half* Y, size_t* wo
       },  // StrideD dD
     },  // EpilogueArguments epilogue
   };
-  cutlass3x_sm90_tensorop_h64x128x16gemm_f16_f16_f16_void_f16_128x128x64_2x1x1_0_ttn_align8_warpspecialized_cooperative_epi_tma_device_type gemm_op;
+  cutlass3x_sm90_tensorop_s64x128x16gemm_f16_f16_f32_void_f16_128x128x64_2x1x1_0_ttn_align8_warpspecialized_cooperative_epi_tma_device_type gemm_op;
   if (workspace_size) {
     *workspace_size = gemm_op.get_workspace_size(arguments);
     return 0;
@@ -243,16 +244,16 @@ PT_EXPORT int cuda_fused_mul_0(const half* X, const half* W, half* Y, size_t* wo
   return 0;
 }
 }
-''', 'so')
+""",
+    "so",
+)
 
-import triton
-import triton.language as tl
-from torch._inductor.triton_heuristics import grid, start_graph, end_graph
 from torch._C import _cuda_getCurrentRawStream as get_cuda_stream
 
 
 async_compile.wait(globals())
 del async_compile
+
 
 def call(args):
     arg0_1, arg1_1 = args
@@ -260,25 +261,34 @@ def call(args):
     assert_size_stride(arg0_1, (256, 32), (32, 1))
     assert_size_stride(arg1_1, (32, 256), (256, 1))
     with torch.cuda._DeviceGuard(0):
-        torch.cuda.set_device(0) # no-op to ensure context
-        buf1 = empty_strided((256, 256), (256, 1), device='cuda', dtype=torch.float16)
-        buf4 = empty_strided((256, 256), (256, 1), device='cuda', dtype=torch.float16)
+        torch.cuda.set_device(0)  # no-op to ensure context
+        buf1 = empty_strided((256, 256), (256, 1), device="cuda", dtype=torch.float16)
+        buf4 = empty_strided((256, 256), (256, 1), device="cuda", dtype=torch.float16)
         # Source Nodes: [mul], Original ATen: [aten.mul]
         stream0 = get_cuda_stream(0)
-        cuda_fused_mul_0.cuda_fused_mul_0(c_void_p(arg0_1.data_ptr()), c_void_p(arg1_1.data_ptr()), c_void_p(buf4.data_ptr()), None, None, c_void_p(stream0))
+        cuda_fused_mul_0.cuda_fused_mul_0(
+            c_void_p(arg0_1.data_ptr()),
+            c_void_p(arg1_1.data_ptr()),
+            c_void_p(buf4.data_ptr()),
+            None,
+            None,
+            c_void_p(stream0),
+        )
         del arg0_1
         del arg1_1
-        return (buf4, )
+        return (buf4,)
 
 
 def benchmark_compiled_module(times=10, repeat=10):
     from torch._dynamo.testing import rand_strided
     from torch._inductor.utils import print_performance
-    arg0_1 = rand_strided((256, 32), (32, 1), device='cuda:0', dtype=torch.float16)
-    arg1_1 = rand_strided((32, 256), (256, 1), device='cuda:0', dtype=torch.float16)
+
+    arg0_1 = rand_strided((256, 32), (32, 1), device="cuda:0", dtype=torch.float16)
+    arg1_1 = rand_strided((32, 256), (256, 1), device="cuda:0", dtype=torch.float16)
     return print_performance(lambda: call([arg0_1, arg1_1]), times=times, repeat=repeat)
 
 
 if __name__ == "__main__":
     from torch._inductor.wrapper_benchmark import compiled_module_main
-    compiled_module_main('None', benchmark_compiled_module)
+
+    compiled_module_main("None", benchmark_compiled_module)

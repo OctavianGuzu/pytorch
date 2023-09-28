@@ -183,6 +183,13 @@ class CUTLASSTemplate(CUDATemplate):
                     throw std::runtime_error(msg);                                                 \\
                   }                                                                                \\
                 }
+
+                // Used as pass-through functor in EVT just for type casting / rounding
+                template <typename T>
+                struct identity_op {
+                  CUTLASS_HOST_DEVICE
+                  T operator()(T val) const { return val; }
+                };
             """
         )
         return res

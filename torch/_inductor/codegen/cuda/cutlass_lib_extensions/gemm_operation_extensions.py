@@ -37,6 +37,7 @@ static_assert(cute::is_same_v<EpilogueScheduleType, cutlass::epilogue::TmaWarpSp
         "Epilogue visitor trees are currently only supported by the TMA warp-specialized epilogue");
 static constexpr auto RoundStyle = cutlass::FloatRoundStyle::round_to_nearest;
 using ElementAcc = ${element_accumulator};
+using ElementD = ${element_d};
 ${epilogue_functor};
 using ${operation_name}_epilogue =
   typename cutlass::epilogue::collective::CollectiveBuilder<

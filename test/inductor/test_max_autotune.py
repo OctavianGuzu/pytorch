@@ -231,9 +231,12 @@ class TestDoBench(TestCase):
             Y = mm(a, b)
             torch.testing.assert_close(Y_compiled, Y)
 
-    @unittest.skipIf(not SM90OrLater, "need sm_90")
-    def test_max_autotune_cutlass_backend_simple_fusion(
-        self, dynamic: bool = False, max_autotune_gemm_backends: str = "CUTLASS"
+    def _test_max_autotune_cutlass_backend_simple_fusion(
+        self,
+        dynamic: bool = False,
+        max_autotune_gemm_backends: str = "CUTLASS",
+        mixed_precision=False,
+        fp16=True,
     ):
         """
         Test simple fusion that's not covered by specific lowering
@@ -245,7 +248,9 @@ class TestDoBench(TestCase):
         # TODO: If I set this to False, I get a compilation error due to
         # mismatched types at some point. If I use fp32 for everything, the Cutlass op generator
         # creates no viable candidate ops that are EVT-capable.
-        torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction = True
+        torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction = (
+            mixed_precision
+        )
 
         def mm(a, b):
             return (a @ b) * 3.0
@@ -255,8 +260,11 @@ class TestDoBench(TestCase):
         # so if these shapes don't all align to at least 8 elements
         # it can happen that no Cutlass 3.x op is available
         # that allows fusions
-        a = torch.randn(256, 32).cuda().half()
-        b = torch.randn(32, 256).cuda().half()
+        a = torch.randn(256, 32).cuda()
+        b = torch.randn(32, 256).cuda()
+        if fp16:
+            a = a.half()
+            b = b.half()
 
         with config.patch(
             {
@@ -272,6 +280,24 @@ class TestDoBench(TestCase):
             Y_compiled = torch.compile(mm, dynamic=dynamic)(a, b)
             Y = mm(a, b)
             torch.testing.assert_close(Y_compiled, Y, atol=1e-2, rtol=1e-2)
+
+    @unittest.skipIf(not SM90OrLater, "need sm_90")
+    def test_max_autotune_cutlass_backend_simple_fusion_fp16(self):
+        self._test_max_autotune_cutlass_backend_simple_fusion(
+            mixed_precision=False, fp16=True
+        )
+
+    @unittest.skipIf(not SM90OrLater, "need sm_90")
+    def test_max_autotune_cutlass_backend_simple_fusion__fp16_fp32acc(self):
+        self._test_max_autotune_cutlass_backend_simple_fusion(
+            mixed_precision=True, fp16=True
+        )
+
+    @unittest.skipIf(not SM90OrLater, "need sm_90")
+    def test_max_autotune_cutlass_backend_simple_fusion_fp32(self):
+        self._test_max_autotune_cutlass_backend_simple_fusion(
+            mixed_precision=False, fp16=False
+        )
 
     # TODO: Enable dynamic test cases when dynamic support is added.
     @unittest.skipIf(not SM75OrLater, "need sm_75")

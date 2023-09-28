@@ -56,63 +56,71 @@ using namespace cute;
   }                                                                                \
 }
 
+// Used as pass-through functor in EVT just for type casting / rounding
+template <typename T>
+struct identity_op {
+  CUTLASS_HOST_DEVICE
+  T operator()(T val) const { return val; }
+};
+
 
 using EpilogueScheduleType = cutlass::epilogue::TmaWarpSpecializedCooperative;
 static_assert(cute::is_same_v<EpilogueScheduleType, cutlass::epilogue::TmaWarpSpecialized> ||
          cute::is_same_v<EpilogueScheduleType, cutlass::epilogue::TmaWarpSpecializedCooperative>,
         "Epilogue visitor trees are currently only supported by the TMA warp-specialized epilogue");
 static constexpr auto RoundStyle = cutlass::FloatRoundStyle::round_to_nearest;
-using ElementAcc = cutlass::half_t;
+using ElementAcc = float;
+using ElementD = cutlass::half_t;
 using EVT_expr_1 = cutlass::epilogue::fusion::Sm90AccFetch /* :=buf1 (matmul output in accumulator) */;
 using EVT_expr_2 = cutlass::epilogue::fusion::Sm90ScalarBroadcast<ElementAcc> /* value=3.0, dtype=torch.float16 */;
 using EVT_expr_3 = cutlass::epilogue::fusion::Sm90EVT<cutlass::epilogue::fusion::Sm90Compute<cutlass::multiplies, ElementAcc, ElementAcc, RoundStyle>,EVT_expr_1,EVT_expr_2>;
-using cutlass3x_sm90_tensorop_h64x128x16gemm_f16_f16_f16_void_f16_128x128x64_2x1x1_0_ttn_align8_warpspecialized_cooperative_epi_tma_epilogue_functor = EVT_expr_3;
+using cutlass3x_sm90_tensorop_s64x128x16gemm_f16_f16_f32_void_f16_128x128x64_2x1x1_0_ttn_align8_warpspecialized_cooperative_epi_tma_epilogue_functor = cutlass::epilogue::fusion::Sm90EVT<cutlass::epilogue::fusion::Sm90Compute<identity_op, ElementD, ElementAcc, RoundStyle>,EVT_expr_3>;
 ;
-using cutlass3x_sm90_tensorop_h64x128x16gemm_f16_f16_f16_void_f16_128x128x64_2x1x1_0_ttn_align8_warpspecialized_cooperative_epi_tma_epilogue =
+using cutlass3x_sm90_tensorop_s64x128x16gemm_f16_f16_f32_void_f16_128x128x64_2x1x1_0_ttn_align8_warpspecialized_cooperative_epi_tma_epilogue =
   typename cutlass::epilogue::collective::CollectiveBuilder<
     cutlass::arch::Sm90, cutlass::arch::OpClassTensorOp,
     cute::Shape<cute::_128, cute::_128, cute::_64>,
     cute::Shape<cute::_2,cute::_1,cute::_1>,
     cutlass::epilogue::collective::EpilogueTileAuto,
-    cutlass::half_t, cutlass::half_t,
+    float, float,
     void, cutlass::layout::ColumnMajor, 8,
     cutlass::half_t, cutlass::layout::RowMajor, 8,
     EpilogueScheduleType,
-    cutlass3x_sm90_tensorop_h64x128x16gemm_f16_f16_f16_void_f16_128x128x64_2x1x1_0_ttn_align8_warpspecialized_cooperative_epi_tma_epilogue_functor
+    cutlass3x_sm90_tensorop_s64x128x16gemm_f16_f16_f32_void_f16_128x128x64_2x1x1_0_ttn_align8_warpspecialized_cooperative_epi_tma_epilogue_functor
   >::CollectiveOp;
 
-using cutlass3x_sm90_tensorop_h64x128x16gemm_f16_f16_f16_void_f16_128x128x64_2x1x1_0_ttn_align8_warpspecialized_cooperative_epi_tma_mainloop =
+using cutlass3x_sm90_tensorop_s64x128x16gemm_f16_f16_f32_void_f16_128x128x64_2x1x1_0_ttn_align8_warpspecialized_cooperative_epi_tma_mainloop =
   typename cutlass::gemm::collective::CollectiveBuilder<
     cutlass::arch::Sm90, cutlass::arch::OpClassTensorOp,
     cutlass::half_t, cutlass::layout::RowMajor, 8,
     cutlass::half_t, cutlass::layout::RowMajor, 8,
-    cutlass::half_t,
+    float,
     cute::Shape<cute::_128, cute::_128, cute::_64>,
     cute::Shape<cute::_2,cute::_1,cute::_1>,
-    cutlass::gemm::collective::StageCountAutoCarveout<sizeof(typename cutlass3x_sm90_tensorop_h64x128x16gemm_f16_f16_f16_void_f16_128x128x64_2x1x1_0_ttn_align8_warpspecialized_cooperative_epi_tma_epilogue::SharedStorage)>,
+    cutlass::gemm::collective::StageCountAutoCarveout<sizeof(typename cutlass3x_sm90_tensorop_s64x128x16gemm_f16_f16_f32_void_f16_128x128x64_2x1x1_0_ttn_align8_warpspecialized_cooperative_epi_tma_epilogue::SharedStorage)>,
   cutlass::gemm::KernelTmaWarpSpecializedCooperative
   >::CollectiveOp;
 
-// Gemm operator cutlass3x_sm90_tensorop_h64x128x16gemm_f16_f16_f16_void_f16_128x128x64_2x1x1_0_ttn_align8_warpspecialized_cooperative_epi_tma
-using cutlass3x_sm90_tensorop_h64x128x16gemm_f16_f16_f16_void_f16_128x128x64_2x1x1_0_ttn_align8_warpspecialized_cooperative_epi_tma_base = cutlass::gemm::kernel::GemmUniversal<
+// Gemm operator cutlass3x_sm90_tensorop_s64x128x16gemm_f16_f16_f32_void_f16_128x128x64_2x1x1_0_ttn_align8_warpspecialized_cooperative_epi_tma
+using cutlass3x_sm90_tensorop_s64x128x16gemm_f16_f16_f32_void_f16_128x128x64_2x1x1_0_ttn_align8_warpspecialized_cooperative_epi_tma_base = cutlass::gemm::kernel::GemmUniversal<
     cute::Shape<int,int,int,int>,
-    cutlass3x_sm90_tensorop_h64x128x16gemm_f16_f16_f16_void_f16_128x128x64_2x1x1_0_ttn_align8_warpspecialized_cooperative_epi_tma_mainloop,
-    cutlass3x_sm90_tensorop_h64x128x16gemm_f16_f16_f16_void_f16_128x128x64_2x1x1_0_ttn_align8_warpspecialized_cooperative_epi_tma_epilogue,
+    cutlass3x_sm90_tensorop_s64x128x16gemm_f16_f16_f32_void_f16_128x128x64_2x1x1_0_ttn_align8_warpspecialized_cooperative_epi_tma_mainloop,
+    cutlass3x_sm90_tensorop_s64x128x16gemm_f16_f16_f32_void_f16_128x128x64_2x1x1_0_ttn_align8_warpspecialized_cooperative_epi_tma_epilogue,
     cutlass::gemm::PersistentScheduler>;
 
 // Define named type
-struct cutlass3x_sm90_tensorop_h64x128x16gemm_f16_f16_f16_void_f16_128x128x64_2x1x1_0_ttn_align8_warpspecialized_cooperative_epi_tma :
-  public cutlass3x_sm90_tensorop_h64x128x16gemm_f16_f16_f16_void_f16_128x128x64_2x1x1_0_ttn_align8_warpspecialized_cooperative_epi_tma_base { };
+struct cutlass3x_sm90_tensorop_s64x128x16gemm_f16_f16_f32_void_f16_128x128x64_2x1x1_0_ttn_align8_warpspecialized_cooperative_epi_tma :
+  public cutlass3x_sm90_tensorop_s64x128x16gemm_f16_f16_f32_void_f16_128x128x64_2x1x1_0_ttn_align8_warpspecialized_cooperative_epi_tma_base { };
 
 
-  using cutlass3x_sm90_tensorop_h64x128x16gemm_f16_f16_f16_void_f16_128x128x64_2x1x1_0_ttn_align8_warpspecialized_cooperative_epi_tma_device_type = cutlass::gemm::device::GemmUniversalAdapter<cutlass3x_sm90_tensorop_h64x128x16gemm_f16_f16_f16_void_f16_128x128x64_2x1x1_0_ttn_align8_warpspecialized_cooperative_epi_tma>;
+  using cutlass3x_sm90_tensorop_s64x128x16gemm_f16_f16_f32_void_f16_128x128x64_2x1x1_0_ttn_align8_warpspecialized_cooperative_epi_tma_device_type = cutlass::gemm::device::GemmUniversalAdapter<cutlass3x_sm90_tensorop_s64x128x16gemm_f16_f16_f32_void_f16_128x128x64_2x1x1_0_ttn_align8_warpspecialized_cooperative_epi_tma>;
 
 // When workspace_size is not a nullptr, populates requested workspace_size and returns.
 // Otherwise, compuates the Gemm kernel using the given workspace ptr.
 extern "C" {
 PT_EXPORT int KERNEL_NAME(const half* X, const half* W, half* Y, size_t* workspace_size, uint8_t* workspace, cudaStream_t stream) {
   try {
-  
+
   {
     if (!X) {
       int64_t X_size = 8192L;
@@ -122,7 +130,7 @@ PT_EXPORT int KERNEL_NAME(const half* X, const half* W, half* Y, size_t* workspa
     }
   }
 
-  
+
   {
     if (!W) {
       int64_t W_size = 8192L;
@@ -132,8 +140,8 @@ PT_EXPORT int KERNEL_NAME(const half* X, const half* W, half* Y, size_t* workspa
     }
   }
 
-  
-  
+
+
   {
     if (!Y) {
       int64_t Y_size = 65536L;
@@ -147,10 +155,10 @@ PT_EXPORT int KERNEL_NAME(const half* X, const half* W, half* Y, size_t* workspa
   int64_t M = 256L;
   int64_t K = 32L;
   int64_t N = 256L;
-  using ElementComputeEpilogue = cutlass3x_sm90_tensorop_h64x128x16gemm_f16_f16_f16_void_f16_128x128x64_2x1x1_0_ttn_align8_warpspecialized_cooperative_epi_tma_device_type::ElementAccumulator;
+  using ElementComputeEpilogue = cutlass3x_sm90_tensorop_s64x128x16gemm_f16_f16_f32_void_f16_128x128x64_2x1x1_0_ttn_align8_warpspecialized_cooperative_epi_tma_device_type::ElementAccumulator;
   using coord_t = cutlass::gemm::GemmCoord::Index;
-  cutlass3x_sm90_tensorop_h64x128x16gemm_f16_f16_f16_void_f16_128x128x64_2x1x1_0_ttn_align8_warpspecialized_cooperative_epi_tma_device_type::Arguments arguments;
-  
+  cutlass3x_sm90_tensorop_s64x128x16gemm_f16_f16_f32_void_f16_128x128x64_2x1x1_0_ttn_align8_warpspecialized_cooperative_epi_tma_device_type::Arguments arguments;
+
   // Initialize GemmUniversal3xInstance arguments.
   arguments = {
     cutlass::gemm::GemmUniversalMode::kGemm,  // GemmUniversalMode mode
@@ -174,10 +182,10 @@ PT_EXPORT int KERNEL_NAME(const half* X, const half* W, half* Y, size_t* workspa
         0 /* batch_stride_w */
       },  // StrideB dB
     },  // MainloopArguments mainloop
-    
+
     // see https://github.com/NVIDIA/cutlass/blob/e0aaa3c3b38db9a89c31f04fef91e92123ad5e2e/include/cutlass/epilogue/collective/sm90_epilogue_tma_warpspecialized.hpp#L184
     {
-      {{}, { static_cast<ElementAcc>(3.0) }},  // thread, typename FusionCallbacks::Arguments ( EVT Arguments )
+      {{{}, { static_cast<ElementAcc>(3.0) }}},  // thread, typename FusionCallbacks::Arguments ( EVT Arguments )
       nullptr,  // ElementC const* ptr_C
       {
         cute::Int<1>{} /* stride_bias0 */,
@@ -192,7 +200,7 @@ PT_EXPORT int KERNEL_NAME(const half* X, const half* W, half* Y, size_t* workspa
       },  // StrideD dD
     },  // EpilogueArguments epilogue
   };
-  cutlass3x_sm90_tensorop_h64x128x16gemm_f16_f16_f16_void_f16_128x128x64_2x1x1_0_ttn_align8_warpspecialized_cooperative_epi_tma_device_type gemm_op;
+  cutlass3x_sm90_tensorop_s64x128x16gemm_f16_f16_f32_void_f16_128x128x64_2x1x1_0_ttn_align8_warpspecialized_cooperative_epi_tma_device_type gemm_op;
   if (workspace_size) {
     *workspace_size = gemm_op.get_workspace_size(arguments);
     return 0;
