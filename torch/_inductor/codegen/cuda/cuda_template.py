@@ -190,6 +190,7 @@ class CUTLASSTemplate(CUDATemplate):
                   CUTLASS_HOST_DEVICE
                   T operator()(T val) const { return val; }
                 };
+
             """
         )
         return res

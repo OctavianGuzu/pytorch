@@ -92,6 +92,9 @@ class CutlassEVTEpilogueTypeFormatter:
     def _convert_to_output_dtype(self, a):
         return f"cutlass::epilogue::fusion::Sm90EVT<cutlass::epilogue::fusion::Sm90Compute<identity_op, ElementD, ElementAcc, RoundStyle>,{a}>"  # noqa: B950
 
+    def _op_to_dtype(self, a, *args, **kwargs):
+        return a  # noqa: B950
+
     def _op_mul(self, a, b):
         return self._cutlass_binary_functional_op("multiplies", a, b)
 
@@ -103,6 +106,16 @@ class CutlassEVTEpilogueTypeFormatter:
 
     def _op_sub(self, a, b):
         return self._cutlass_binary_functional_op("minus", a, b)
+
+    def _op_minimum(self, a, b):
+        return self._cutlass_binary_functional_op("minimum", a, b)
+
+    def _op_maximum(self, a, b):
+        return self._cutlass_binary_functional_op("maximum", a, b)
+
+    def _op_relu(self, a):
+        const_zero = self._op_constant(0.0, "torch.float32")
+        return f"cutlass::epilogue::fusion::Sm90EVT<cutlass::epilogue::fusion::Sm90Compute<cutlass::maximum, ElementAcc, ElementAcc, RoundStyle>,{a}, {const_zero}>"  # noqa: B950
 
     def reduction(self, dtype, src_dtype, reduction_type, value):
         raise NotImplementedError()
@@ -162,6 +175,9 @@ class CutlassEVTEpilogueArgumentFormatter:
             line = fn(*fargs, **fkwargs)
             return line
 
+        if name.startswith("_"):
+            raise NotImplementedError(name)
+
         if hasattr(self, f"_op_{name}"):
             return inner
         else:
@@ -196,8 +212,25 @@ class CutlassEVTEpilogueArgumentFormatter:
     def _op_sub(self, a, b):
         return self._cutlass_binary_functional_op("minus", a, b)
 
+    def _op_minimum(self, a, b):
+        return self._cutlass_binary_functional_op("minimum", a, b)
+
+    def _op_maximum(self, a, b):
+        return self._cutlass_binary_functional_op("maximum", a, b)
+
+    def _op_relu(self, a):
+        const_zero = self._op_constant(0.0, "torch.float32")
+        return "{" + str(a) + ", " + const_zero + "}"
+
     def reduction(self, dtype, src_dtype, reduction_type, value):
         raise NotImplementedError()
+
+    def _op_to_dtype(self, a, dtype):
+        assert dtype in (
+            "torch.float32",
+            "torch.float16",
+        ), f"Unsupported dtype: {dtype}"
+        return a
 
     def getvalue(self, result):
         return "{" + str(result) + "}"
